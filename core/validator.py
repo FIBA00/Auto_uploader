@@ -3,34 +3,25 @@
 
 # utils/u3_data_process.py [utilities / data process]
 
-
-import os
 import sys
-import json
-import time
-import shutil
-import random
-import string
-import requests
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from datetime import datetime, timedelta
-from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional, Tuple, Set, Union
+from datetime import datetime
+from typing import Dict, List, Optional, Set, Union
 
 # sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # Removed for production best practice
-from .t3_data_config import DataForgeConfig  # Use relative import for same-package utility
-from ..utils.t1_log_manager import get_logger  # Use relative import for logger
-from .t2_dir_manager import DirManager  # Use relative import for DirManager
+from config.settings import Settings  
+from utils.logger import get_logger 
+from utils.file_ops import DirManager 
 
 logger = get_logger(__file__)
 
 
-class DataProcess:
+class DataValidator:
     def __init__(self) -> None:
         self.dir_manager: DirManager = DirManager()
-        self.data_config: DataForgeConfig = DataForgeConfig()
+        self.data_config: Settings = Settings()
         # Retrieve all important data forge file paths as attributes from DirManager
         paths = (
             self.dir_manager.get_data_forge_paths()
@@ -584,7 +575,7 @@ class DataProcess:
             with open(self.report_path, "a") as f:
                 f.write("\n".join(report_lines) + "\n")
 
-            # Also print to console
+            # Also logger.info to console
             # logger.info('\n'.join(report_lines))
             logger.debug(f"Report appended to: {self.report_path}")
 
@@ -934,7 +925,7 @@ class DataProcess:
 
 if __name__ == "__main__":
     try:
-        dprocess = DataProcess()
+        dprocess = DataValidator()
         success = dprocess.process_data()
         if not success:
             sys.exit(1)

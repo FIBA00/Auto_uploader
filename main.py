@@ -13,7 +13,11 @@ from datetime import datetime
 from typing import Dict, Optional
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from src import Configs
+from config.settings import get_project_root, Settings, UserConfig #type: ignore
+from utils.logger import get_logger
+
+
+logger = get_logger(__file__)
 
 
 class AutoCommitter:
@@ -37,7 +41,7 @@ class AutoCommitter:
         # Default branch name, will be updated during initialization
         self.branch_name = "main"
         # Use ScraperConfig for file paths
-        self.sd = Configs()
+        self.sd = Settings()
 
         self.files_to_commit: Dict[str, str] = {
             "Pink Number Data": self.sd._pink_csv_path,
@@ -58,10 +62,10 @@ class AutoCommitter:
         if not self.files_to_commit:
             raise ValueError("Files to commit cannot be empty")
 
-        print(
+        logger.info(
             f"AutoCommitter initialized with {len(self.files_to_commit)} files to monitor"
         )
-        print(f"Current Working dir: {os.getcwd()}")
+        logger.info(f"Current Working dir: {os.getcwd()}")
 
         # Validate that we're in a git repository
         if not self.check_git_repository():
@@ -73,13 +77,13 @@ class AutoCommitter:
             all_branches = self.run_command("git branch -a")
             if "master" in all_branches:
                 self.branch_name = "master"
-                print(f"Found 'master' branch, using it as default")
+                logger.info(f"Found 'master' branch, using it as default")
             else:
                 # Try to get the current branch name
                 branch_output = self.run_command("git branch --show-current")
                 if branch_output and "Error:" not in branch_output:
                     self.branch_name = branch_output.strip()
-                    print(f"Using current branch: {self.branch_name}")
+                    logger.info(f"Using current branch: {self.branch_name}")
                 else:
                     # If we can't get the current branch, try to get the default remote branch
                     remote_output = self.run_command("git remote show origin")
@@ -88,14 +92,14 @@ class AutoCommitter:
                             if "HEAD branch:" in line:
                                 default_branch = line.split("HEAD branch:")[1].strip()
                                 self.branch_name = default_branch
-                                print(
+                                logger.info(
                                     f"Using remote default branch: {self.branch_name}"
                                 )
                                 break
 
-            print(f"Branch name set to: {self.branch_name}")
+            logger.info(f"Branch name set to: {self.branch_name}")
         except Exception as e:
-            print(
+            logger.info(
                 f"Could not determine branch name, using default '{self.branch_name}': {str(e)}"
             )
 
@@ -114,12 +118,12 @@ class AutoCommitter:
                 existing_files.append(name)
 
         if existing_files:
-            print(
+            logger.info(
                 f"Found {len(existing_files)} existing files to monitor: {', '.join(existing_files)}"
             )
             return True
         else:
-            print("No files found to monitor")
+            logger.info("No files found to monitor")
             return False
 
     def run_command(self, command: str, cwd: Optional[str] = None) -> str:
@@ -136,7 +140,7 @@ class AutoCommitter:
         if not command:
             raise ValueError("Command cannot be empty")
 
-        print(f"Running: {command}")
+        logger.info(f"Running: {command}")
         try:
             result = subprocess.run(
                 command,
@@ -149,7 +153,7 @@ class AutoCommitter:
             return result.stdout.strip()
         except subprocess.CalledProcessError as e:
             error_msg = f"Command failed: {e.stderr.strip()}"
-            print(error_msg)
+            logger.info(error_msg)
             return f"Error: {error_msg}"
 
     def git_fetch(self) -> bool:
@@ -161,10 +165,10 @@ class AutoCommitter:
         """
         try:
             output = self.run_command("git fetch origin")
-            print("Repository fetch completed")
+            logger.info("Repository fetch completed")
             return "Error:" not in output
         except Exception as e:
-            print(f"Failed to fetch from repository: {str(e)}")
+            logger.info(f"Failed to fetch from repository: {str(e)}")
             return False
 
     def git_pull(self) -> bool:
@@ -177,11 +181,11 @@ class AutoCommitter:
         try:
             output = self.run_command(f"git pull origin {self.branch_name}")
             if "Error:" not in output:
-                print("Repository pull completed")
+                logger.info("Repository pull completed")
                 return True
             return False
         except Exception as e:
-            print(f"Failed to pull from repository: {str(e)}")
+            logger.info(f"Failed to pull from repository: {str(e)}")
             return False
 
     def git_status(self) -> Dict[str, list]:
@@ -211,7 +215,7 @@ class AutoCommitter:
 
             return status
         except Exception as e:
-            print(f"Failed to get repository status: {str(e)}")
+            logger.info(f"Failed to get repository status: {str(e)}")
             return status
 
     def git_add(self) -> bool:
@@ -223,25 +227,25 @@ class AutoCommitter:
         """
         any_added = False
         if not self.check_files():
-            print("No files exist to add")
+            logger.info("No files exist to add")
             return False
 
         for name, file_path in self.files_to_commit.items():
             if os.path.isfile(file_path):
                 # Skip zero-length files
                 if os.path.getsize(file_path) == 0:
-                    print(f"Skipping empty file: {name}")
+                    logger.info(f"Skipping empty file: {name}")
                     continue
 
                 result = self.run_command(f"git add {file_path}")
                 if "Error:" not in result:
-                    print(f"Added {name} to staging")
+                    logger.info(f"Added {name} to staging")
                     any_added = True
 
         if any_added:
-            print("Files staged successfully")
+            logger.info("Files staged successfully")
         else:
-            print("No files were staged")
+            logger.info("No files were staged")
 
         return any_added
 
@@ -255,7 +259,7 @@ class AutoCommitter:
         # Check for staged changes
         status = self.git_status()
         if not status["staged"]:
-            print("No staged changes to commit")
+            logger.info("No staged changes to commit")
             return False
 
         # Add timestamp to commit message
@@ -267,10 +271,10 @@ class AutoCommitter:
         result = self.run_command(commit_command)
 
         if "Error:" in result:
-            print(f"Failed to commit: {result}")
+            logger.info(f"Failed to commit: {result}")
             return False
         else:
-            print("Changes committed successfully")
+            logger.info("Changes committed successfully")
             return True
 
     def git_push(self) -> bool:
@@ -284,7 +288,7 @@ class AutoCommitter:
             # First check if we're on the branch we want to push
             current_branch = self.run_command("git branch --show-current").strip()
             if current_branch != self.branch_name:
-                print(
+                logger.info(
                     f"Currently on '{current_branch}', switching to '{self.branch_name}'"
                 )
 
@@ -299,9 +303,9 @@ class AutoCommitter:
                     # Branch exists, just switch to it
                     switch_result = self.run_command(f"git checkout {self.branch_name}")
                     if "Error:" in switch_result:
-                        print(f"Failed to switch to existing branch: {switch_result}")
+                        logger.info(f"Failed to switch to existing branch: {switch_result}")
                         return False
-                    print(f"Switched to existing branch '{self.branch_name}'")
+                    logger.info(f"Switched to existing branch '{self.branch_name}'")
                 else:
                     # Check if branch exists on remote
                     remote_branches = self.run_command("git branch -r")
@@ -315,18 +319,18 @@ class AutoCommitter:
                             f"git checkout -b {self.branch_name} --track origin/{self.branch_name}"
                         )
                         if "Error:" in track_result:
-                            print(f"Failed to track remote branch: {track_result}")
+                            logger.info(f"Failed to track remote branch: {track_result}")
                             return False
-                        print(f"Tracking remote branch '{self.branch_name}'")
+                        logger.info(f"Tracking remote branch '{self.branch_name}'")
                     else:
                         # Create new branch
                         create_result = self.run_command(
                             f"git checkout -b {self.branch_name}"
                         )
                         if "Error:" in create_result:
-                            print(f"Failed to create new branch: {create_result}")
+                            logger.info(f"Failed to create new branch: {create_result}")
                             return False
-                        print(
+                        logger.info(
                             f"Created and switched to new branch '{self.branch_name}'"
                         )
 
@@ -339,13 +343,13 @@ class AutoCommitter:
                 has_commits = False
 
             if not has_commits:
-                print("No commits found. Creating initial commit.")
+                logger.info("No commits found. Creating initial commit.")
                 # Create an empty commit if no commits exist
                 empty_commit = self.run_command(
                     "git commit --allow-empty -m 'Initial commit'"
                 )
                 if "Error:" in empty_commit:
-                    print(f"Failed to create initial commit: {empty_commit}")
+                    logger.info(f"Failed to create initial commit: {empty_commit}")
                     return False
 
             # Try to push, handling the case where remote branch doesn't exist
@@ -353,26 +357,26 @@ class AutoCommitter:
 
             # If push fails with "src refspec" error, try setting upstream
             if "src refspec" in push_result or "no upstream branch" in push_result:
-                print(f"Remote branch not set up. Setting upstream branch.")
+                logger.info(f"Remote branch not set up. Setting upstream branch.")
                 upstream_result = self.run_command(
                     f"git push --set-upstream origin {self.branch_name}"
                 )
                 if "Error:" not in upstream_result:
-                    print("Successfully set upstream and pushed changes")
+                    logger.info("Successfully set upstream and pushed changes")
                     return True
                 else:
-                    print(f"Failed to set upstream branch: {upstream_result}")
+                    logger.info(f"Failed to set upstream branch: {upstream_result}")
                     return False
 
             if "Error:" not in push_result:
-                print("Changes pushed to remote repository")
+                logger.info("Changes pushed to remote repository")
                 return True
             else:
-                print(f"Failed to push: {push_result}")
+                logger.info(f"Failed to push: {push_result}")
                 return False
 
         except Exception as e:
-            print(f"Error pushing changes: {str(e)}")
+            logger.info(f"Error pushing changes: {str(e)}")
             return False
 
     def git_sync(self) -> bool:
@@ -384,15 +388,15 @@ class AutoCommitter:
         """
         pull_success = self.git_pull()
         if not pull_success:
-            print("Pull failed during sync, attempting push anyway")
+            logger.info("Pull failed during sync, attempting push anyway")
 
         push_success = self.git_push()
 
         if pull_success and push_success:
-            print("Repository sync completed successfully")
+            logger.info("Repository sync completed successfully")
             return True
         else:
-            print("Repository sync completed with warnings")
+            logger.info("Repository sync completed with warnings")
             return False
 
     def check_git_repository(self) -> bool:
@@ -412,7 +416,7 @@ class AutoCommitter:
             )
             return result.returncode == 0
         except Exception as e:
-            print(f"Error checking git repository: {str(e)}")
+            logger.info(f"Error checking git repository: {str(e)}")
             return False
 
     def run(self) -> bool:
@@ -422,7 +426,7 @@ class AutoCommitter:
         Returns:
             bool: True if the process completed successfully, False otherwise.
         """
-        print("Starting auto-commit process")
+        logger.info("Starting auto-commit process")
 
         # Save current directory
         original_dir = os.getcwd()
@@ -443,11 +447,11 @@ class AutoCommitter:
 
             success = True
             for name, operation, delay in operations:
-                print(f"Operation: {name}")
+                logger.info(f"Operation: {name}")
                 try:
                     operation_success = operation()
                     if not operation_success and name in ["Adding", "Committing"]:
-                        print(
+                        logger.info(
                             f"Skipping remaining operations as {name.lower()} had no changes"
                         )
                         # No need to consider this a failure
@@ -455,18 +459,18 @@ class AutoCommitter:
                     success = success and operation_success
                     time.sleep(delay)
                 except Exception as e:
-                    print(f"Error during {name}: {str(e)}")
+                    logger.info(f"Error during {name}: {str(e)}")
                     success = False
 
             if success:
-                print("Auto-commit process completed successfully")
+                logger.info("Auto-commit process completed successfully")
             else:
-                print("Auto-commit process completed with warnings")
+                logger.info("Auto-commit process completed with warnings")
 
             return success
 
         except Exception as e:
-            print(f"Error during auto-commit process: {str(e)}")
+            logger.info(f"Error during auto-commit process: {str(e)}")
             return False
         finally:
             # Restore original directory
@@ -478,7 +482,7 @@ if __name__ == "__main__":
     max_consecutive_errors = 3
     consecutive_errors = 0
 
-    print("Starting GitSyncer service")
+    logger.info("Starting GitSyncer service")
 
     try:
         while True:
@@ -492,7 +496,7 @@ if __name__ == "__main__":
                     consecutive_errors += 1
 
                 if consecutive_errors >= max_consecutive_errors:
-                    print(
+                    logger.info(
                         f"Too many consecutive errors ({consecutive_errors}), will retry in {sync_interval * 2} seconds"
                     )
                     time.sleep(sync_interval * 2)  # Longer wait after errors
@@ -504,14 +508,14 @@ if __name__ == "__main__":
                     next_sync_time = datetime.fromtimestamp(next_sync).strftime(
                         "%H:%M:%S"
                     )
-                    print(f"Next sync at {next_sync_time}")
+                    logger.info(f"Next sync at {next_sync_time}")
                     time.sleep(sync_interval)
 
             except Exception as e:
-                print(f"Unexpected error in sync loop: {str(e)}")
+                logger.info(f"Unexpected error in sync loop: {str(e)}")
                 consecutive_errors += 1
                 time.sleep(sync_interval)
 
     except KeyboardInterrupt:
-        print("GitSyncer service stopped by user")
+        logger.info("GitSyncer service stopped by user")
         sys.exit(0)

@@ -8,22 +8,16 @@
 import sys
 import json
 import time
-import random
-import string
 import requests
-from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 # sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # Removed for production best practice
-from config.settings import Settings, UserConfig 
-from utils.logger import get_logger  
-from utils.file_ops import DirManager 
+from config.settings import Settings, UserConfig  
+from utils.logger import get_logger 
 
 
 logger = get_logger(__file__)
-
-
 class RepoProcess:
     def __init__(self) -> None:
         self.user_configs: List[UserConfig] = []
@@ -32,7 +26,6 @@ class RepoProcess:
         self.current_user: Optional[UserConfig] = None
         self.repo_url: Optional[str] = None
         self.headers: Optional[Dict[str, str]] = None
-        self.dir_manager: DirManager = DirManager()
         self.config: Settings = Settings()
         self.user_config: UserConfig = UserConfig()
 
@@ -178,7 +171,6 @@ class RepoProcess:
         Cons:
         - Additional API call overhead
 
-        This function is structured to handle all known exceptions explicitly for better error resistance and maintainability.
         """
         try:
             # Attempt to check the current rate limit status
@@ -232,274 +224,7 @@ class RepoProcess:
         # If we did not need to wait, return False
         return False
 
-    def find_csv_files(self, contents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Find specific CSV files in repository contents, including subdirectories.
-
-        This function is structured for robust error handling and maintainability.
-        It breaks down the logic into smaller helper methods for clarity and easier testing.
-
-        Returns:
-            List[Dict[str, Any]]: List of found CSV file metadata dictionaries.
-        """
-        # List to collect found CSV files
-        csv_files: List[Dict[str, Any]] = []
-
-        # Log the number of items to be searched
-        logger.info(f"Searching through {len(contents)} items")
-
-        # Separate files and directories for processing
-        try:
-            files, directories = self._separate_files_and_dirs(contents)
-        except KeyError as ke:
-            logger.error(f"Malformed content item missing expected key: {ke}")
-            return []
-        except Exception as e:
-            logger.error(f"Unexpected error during file/dir separation: {e}")
-            return []
-
-        # Process files: filter and collect target CSVs
-        try:
-            csv_files.extend(self._filter_target_csv_files(files))
-        except Exception as e:
-            logger.error(f"Error filtering target CSV files: {e}")
-
-        # Process directories recursively
-        for dir_item in directories:
-            # Check rate limit before each directory traversal
-            try:
-                remaining, reset_time = self.check_rate_limit()
-            except Exception as e:
-                logger.error(f"Error checking rate limit: {e}")
-                continue
-
-            if remaining is None or remaining < 5:  # Keep a buffer of 5 calls
-                logger.warning("Rate limit is low, waiting for reset...")
-                try:
-                    if not self.wait_for_rate_limit():
-                        logger.error("Failed to wait for rate limit reset")
-                        continue
-                except Exception as e:
-                    logger.error(f"Error during rate limit wait: {e}")
-                    continue
-
-            logger.info(f"Exploring directory: {dir_item.get('name', '[unknown]')}")
-            try:
-                dir_contents = self._get_directory_contents(dir_item)
-                if dir_contents is not None:
-                    # Recursively search the directory for CSV files
-                    sub_csv_files = self.find_csv_files(dir_contents)
-                    if sub_csv_files:
-                        logger.info(
-                            f"Found {len(sub_csv_files)} target files in {dir_item.get('name', '[unknown]')}"
-                        )
-                        csv_files.extend(sub_csv_files)
-            except requests.exceptions.HTTPError as http_err:
-                status_code = getattr(http_err.response, "status_code", None)
-                if status_code == 403:
-                    logger.warning(
-                        f"Access forbidden for directory {dir_item.get('name', '[unknown]')}, skipping..."
-                    )
-                    continue
-                logger.error(
-                    f"HTTP error accessing directory {dir_item.get('name', '[unknown]')}: {http_err}"
-                )
-                continue
-            except requests.exceptions.ConnectionError as ce:
-                logger.error(
-                    f"Connection error accessing directory {dir_item.get('name', '[unknown]')}: {ce}"
-                )
-                continue
-            except requests.exceptions.Timeout as te:
-                logger.error(
-                    f"Timeout accessing directory {dir_item.get('name', '[unknown]')}: {te}"
-                )
-                continue
-            except requests.exceptions.RequestException as re:
-                logger.error(
-                    f"Request exception accessing directory {dir_item.get('name', '[unknown]')}: {re}"
-                )
-                continue
-            except json.JSONDecodeError as je:
-                logger.error(
-                    f"JSON decode error for directory {dir_item.get('name', '[unknown]')}: {je}"
-                )
-                continue
-            except Exception as e:
-                logger.error(
-                    f"Unexpected error accessing directory {dir_item.get('name', '[unknown]')}: {e}"
-                )
-                continue
-
-        # Sort files by name for consistency
-        csv_files.sort(key=lambda x: x.get("name", ""))
-        logger.info(f"Found {len(csv_files)} target files in total")
-        return csv_files
-
-    def _separate_files_and_dirs(
-        self, contents: List[Dict[str, Any]]
-    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-        """
-        Helper to separate files and directories, skipping ignored directories.
-
-        Returns:
-            Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]: (files, directories)
-        """
-        files = []
-        directories = []
-        for item in contents:
-            item_type = item.get("type")
-            item_name = item.get("name", "")
-            if item_type == "file":
-                files.append(item)
-            elif item_type == "dir":
-                # Skip ignored or hidden directories
-                if item_name in self.config.ignore_dirs or item_name.startswith("."):
-                    logger.info(f"Skipping ignored directory: {item_name}")
-                    continue
-                directories.append(item)
-        return files, directories
-
-    def _filter_target_csv_files(
-        self, files: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """
-        Helper to filter files for target CSVs based on config flags.
-
-        Returns:
-            List[Dict[str, Any]]: List of matching CSV file dicts.
-        """
-        target_files = []
-        for item in files:
-            file_name = item.get("name", "").lower()
-            # Check if file matches any enabled processing flags
-            if (
-                (file_name == "allnumber.csv" and self.config.process_all_number)
-                or (
-                    file_name == "normalnumberdata.csv"
-                    and self.config.process_normal_number
-                )
-                or (file_name == "pinkdata.csv" and self.config.process_pink_data)
-                or (
-                    file_name == "strategicdata.csv"
-                    and self.config.process_strategic_data
-                )
-            ):
-                logger.info(f"Found target file: {item.get('name', '[unknown]')}")
-                target_files.append(item)
-        return target_files
-
-    def _get_directory_contents(
-        self, dir_item: Dict[str, Any]
-    ) -> Optional[List[Dict[str, Any]]]:
-        """
-        Helper to fetch and decode the contents of a directory from the API.
-
-        Returns:
-            Optional[List[Dict[str, Any]]]: List of directory contents, or None on error.
-        """
-        dir_url = dir_item.get("url")
-        if not dir_url:
-            logger.error(f"Directory item missing 'url': {dir_item}")
-            return None
-        try:
-            # Add a timeout to prevent indefinite hanging (default: 15 seconds)
-            # This ensures the request will fail gracefully if the server is unresponsive.
-            dir_response = requests.get(dir_url, headers=self.headers, timeout=15)
-            dir_response.raise_for_status()  # Raises HTTPError for bad responses
-            dir_contents = dir_response.json()
-            if not isinstance(dir_contents, list):
-                logger.error(
-                    f"Directory contents not a list for {dir_item.get('name', '[unknown]')}"
-                )
-                return None
-            return dir_contents
-        except requests.exceptions.RequestException as re:
-            logger.error(f"Request exception fetching directory contents: {re}")
-            raise
-        except json.JSONDecodeError as je:
-            logger.error(f"JSON decode error fetching directory contents: {je}")
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error fetching directory contents: {e}")
-            raise
-
-    def download_csv_files(self) -> bool:
-        logger.info("Starting download_csv_files process.")
-        all_success: bool = True  # Track if all downloads succeed
-        for csv_file in getattr(self, "csv_files", []):
-            try:
-                logger.info(f"Processing file: {csv_file['name']}")
-                file_url: str = csv_file["download_url"]
-                original_name: str = csv_file["name"]
-                dest_path: Path = self.dir_manager.get_destination_dir(original_name)
-                logger.debug(f"Destination path resolved: {dest_path}")
-                if dest_path.exists() and dest_path.is_file():
-                    logger.warning(
-                        f"Destination path {dest_path} is a file. Using its parent directory for saving downloaded file."
-                    )
-                    dest_dir = dest_path.parent
-                elif dest_path.suffix == ".csv":
-                    logger.warning(
-                        f"Destination path {dest_path} looks like a file. Using its parent directory for saving downloaded file."
-                    )
-                    dest_dir = dest_path.parent
-                else:
-                    dest_dir = dest_path
-                logger.debug(f"Final destination directory: {dest_dir}")
-                dest_dir.mkdir(parents=True, exist_ok=True)
-                random_suffix: str = self.generate_random_string()
-                file_name: str = f"{original_name.split('.')[0]}_{random_suffix}.csv"
-                file_path: Path = dest_dir / file_name
-                logger.info(f"Downloading from {file_url} to {file_path}")
-                with open(file_path, "wb") as f:
-                    for chunk in requests.get(
-                        file_url, stream=True, timeout=30
-                    ).iter_content(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
-                logger.info(f"Successfully saved file to: {file_path}")
-            except requests.exceptions.RequestException as e:
-                logger.error(
-                    f"Network error when downloading {csv_file.get('name', 'unknown')}: {e}"
-                )
-                all_success = False
-                continue
-            except IOError as e:
-                logger.error(
-                    f"File system error when saving {csv_file.get('name', 'unknown')}: {e}"
-                )
-                all_success = False
-                continue
-            except KeyError as e:
-                logger.error(f"Missing expected key in csv_file dict: {e}")
-                all_success = False
-                continue
-        logger.info(f"All downloads completed. Success: {all_success}")
-        return all_success
-
-    @staticmethod
-    def generate_random_string(length: int = 8) -> str:
-        """Generate a random string of specified length.
-
-        Pros:
-        - Better error handling
-        - More secure random generation
-        - Clearer return types
-
-        Cons:
-        - Additional generation overhead
-        """
-        try:
-            if not isinstance(length, int) or length < 1:
-                length = 8
-
-            chars = string.ascii_letters + string.digits
-            return "".join(random.choices(chars, k=length))
-
-        except Exception as e:
-            logger.debug(f"Error generating random string: {e}")
-            return "default"
+   
 
     # --------------------------------main process-----------------------------
     def _safe_setup_user_headers(self, user_config) -> bool:
@@ -534,7 +259,6 @@ class RepoProcess:
             remaining, reset_time = self.check_rate_limit()
             if remaining is None or remaining < 10:  # Keep a buffer of 10 calls
                 logger.warning("Rate limit is low, waiting for reset...")
-                logger.info(f"Reset time is : {reset_time}")
                 if not self.wait_for_rate_limit():
                     logger.error("Failed to wait for rate limit reset")
                     return False
@@ -570,25 +294,6 @@ class RepoProcess:
                 logger.info(f"Contents are empty for repository: {repo_name}")
                 return False
 
-
-            # Find and download CSV files
-            self.csv_files = self.find_csv_files(contents)
-            if self.csv_files:
-                logger.info(f"Found {len(self.csv_files)} CSV files in {repo_name}")
-
-                # Download files with retry logic
-                success = self._download_csv_files_with_retries(repo_name)
-                if success:
-                    # NOTE: clog.FSuccess is undefined in the context, so using logger.info instead
-                    logger.info(f"✅ Successfully processed repository: {repo_name}")
-                    return True
-                else:
-                    logger.error(f"❌ Failed to process repository: {repo_name}")
-                    return False
-            else:
-                logger.info(f"No CSV files found in {repo_name}")
-                return False
-
         except requests.exceptions.HTTPError as e:
             status_code = getattr(e.response, "status_code", None)
             if status_code == 404:
@@ -614,30 +319,6 @@ class RepoProcess:
             logger.error(f"Unexpected error processing {repo_name}: {e}")
             return False
 
-    def _download_csv_files_with_retries(self, repo_name: str) -> bool:
-        """
-        Attempt to download CSV files with retry logic and exponential backoff.
-        Returns True if download succeeds, False otherwise.
-        """
-        for attempt in range(self.config.max_repo_retries):
-            try:
-                if self.download_csv_files():
-                    return True
-                elif attempt < self.config.max_repo_retries - 1:
-                    logger.warning(
-                        f"Download failed, retrying... (Attempt {attempt + 2}/{self.config.max_repo_retries})"
-                    )
-                    time.sleep(2**attempt)  # Exponential backoff
-
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Request error during CSV download for {repo_name}: {e}")
-            except IOError as e:
-                logger.error(f"IO error during CSV download for {repo_name}: {e}")
-            except Exception as e:
-                logger.error(
-                    f"Unexpected error during CSV download for {repo_name}: {e}"
-                )
-        return False
 
     def _repo_processing(self) -> bool:
         """

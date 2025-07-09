@@ -2,12 +2,9 @@
 # This module manages directories and files: creation, validation, and existence checks.
 # It also provides utility functions to return directory and file locations for data storage.
 
-import os
 import sys
-import shutil
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple, Set, Union
-from dataclasses import dataclass
+from typing import Dict, Any, List, Optional, Set, Union
 from datetime import datetime
 from utils import get_logger
 

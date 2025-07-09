@@ -11,6 +11,12 @@ try:
 except ImportError:
     pass  # dotenv is optional
 
+from utils.logger import get_logger
+
+logger = get_logger(__file__)
+
+
+
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.json')
 LOG_PATH = os.path.join(os.path.dirname(__file__), 'upload_log.txt')
 
@@ -89,12 +95,12 @@ def main():
     repo = args.repo or config.get("repo")
     branch = args.branch or config.get("branch", "main")
     if not token or not repo:
-        print("Error: GitHub token and repo must be provided via args, .env, or config.json")
+        logger.info("Error: GitHub token and repo must be provided via args, .env, or config.json")
         exit(1)
 
     uploader = GitHubUploader(token, repo, branch)
     status, resp = uploader.upload(args.file, args.path, args.msg, mode=args.mode)
-    print(f"Upload status: {status}\n{resp[:200]}")
+    logger.info(f"Upload status: {status}\n{resp[:200]}")
     log_upload(args.file, status, args.msg)
 
 if __name__ == "__main__":
