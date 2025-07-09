@@ -7,7 +7,7 @@ from typing import Optional, Any  # import at the top if not already present
 
 
 @dataclass
-class ScraperConfig:
+class Configs:
     _username: str = "0965475618"
     _password: str = "Sena##545063"
     _working_url: str = "https://www.betika.com/et/aviator"

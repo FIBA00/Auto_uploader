@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Dict, Optional
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+from src import Configs
 
 
 class AutoCommitter:
@@ -36,7 +36,7 @@ class AutoCommitter:
         # Default branch name, will be updated during initialization
         self.branch_name = "main"
         # Use ScraperConfig for file paths
-        self.sd = ScraperConfig()
+        self.sd = Configs()
 
         self.files_to_commit: Dict[str, str] = {
             "Pink Number Data": self.sd._pink_csv_path,
