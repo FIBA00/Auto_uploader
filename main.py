@@ -1,6 +1,7 @@
+#Auto_uploader/main.py
 """
-
-Makee llc: Auto File committer and Git syncing system
+Our entry point
+Makee llc: Auto File committer and Git hub repo syncing system
 
 """
 

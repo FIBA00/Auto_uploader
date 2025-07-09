@@ -345,7 +345,37 @@ Absolutely! Here’s a detailed analysis and feedback on your Project Guide for 
 
 ---
 
-## 9. **Summary**
-Your guide is well-structured, practical, and forward-thinking. It balances clarity for new users with enough technical depth for developers. With a few small additions (error handling, testing, security notes), it would be even stronger.
 
-If you want, I can help you turn this into a README, generate a sample uploader CLI, or help with any of the “future” features you mentioned!
+
+auto_uploader/
+│
+├── main.py                  # Entry point (execution CLI/manager)
+├── config/                  # Static config, tokens, constants
+│   └── settings.py
+│
+├── core/                    # Core upload logic (engine + orchestrators)
+│   ├── uploader.py          # Push logic
+│   ├── validator.py         # File checks
+│   └── router.py            # Path control logic
+│
+├── utils/                   # Shared helpers (not tied to core)
+│   ├── logger.py
+│   ├── file_ops.py
+│   └── github_api.py
+│
+├── services/                # External integrations (APIs, etc.)
+│   ├── drive_sync.py
+│   └── github_hooks.py
+│
+└── tasks/                   # Optional: for CLI-task based separation
+    ├── upload_local.py
+    └── sync_all.py
+
+
+| Type             | Pattern                    | Examples                            | Notes                   |
+| ---------------- | -------------------------- | ----------------------------------- | ----------------------- |
+| 🧠 Core logic    | `core/` + `<action>.py`    | `uploader.py`, `router.py`          | System internals        |
+| 🛠 Utilities     | `utils/` + noun/verb combo | `file_ops.py`, `logger.py`          | Reusable across modules |
+| 🔌 Services      | `services/` + provider/api | `github_api.py`, `drive_sync.py`    | External integrations   |
+| 📦 Tasks/Scripts | `tasks/` + verb\_noun      | `upload_local.py`, `sync_models.py` | Good for CLI commands   |
+| ⚙ Config         | `config/settings.py`       |                                     | Centralized constants   |
