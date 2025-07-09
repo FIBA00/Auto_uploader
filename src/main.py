@@ -1,4 +1,8 @@
-"""Makee llc: Auto File committer and Git syncing system"""
+"""
+
+Makee llc: Auto File committer and Git syncing system
+
+"""
 
 import os
 import sys
@@ -9,7 +13,6 @@ from typing import Dict, Optional
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from raider_tools import ScraperConfig #type: ignore
 
 
 class AutoCommitter:
