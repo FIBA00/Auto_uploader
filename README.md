@@ -12,6 +12,7 @@ Auto_uploader is a flexible system for uploading any data (models, CSVs, etc.) f
 ---
 
 ## Table of Contents
+
 - [About](#about)
 - [How to Use](#how-to-use)
 - [Architecture](#architecture)
@@ -50,15 +51,17 @@ python auto_uploader.py --file daily.csv --repo fraol/GCloud_File_Storage --toke
 - **Logging of uploads**
 - **Configurable via CLI, `.env`, or JSON**
 
-
 ## Configuration
 
 - Store tokens in `.env` or `config.json` (do not hardcode in scripts)
 - Example `.env`:
+
   ```env
   GH_TOKEN=ghp_xxxxxxx
   ```
+
 - Example `config.json`:
+
   ```json
   {
     "token": "ghp_XXXXXX",
@@ -66,7 +69,9 @@ python auto_uploader.py --file daily.csv --repo fraol/GCloud_File_Storage --toke
     "base_path": "models/"
   }
   ```
+
 - Use `python-dotenv` to load `.env` in Python:
+
   ```python
   from dotenv import load_dotenv
   import os
@@ -91,12 +96,13 @@ auto_uploader/
 
 ---
 
-
 ## Authors
+
 - [@fraold](https://github.com/fraold) - Project lead
 
 ---
 
 ## Acknowledgements
+
 - Inspired by robust data pipeline and automation needs
 - Thanks to contributors and open-source libraries
