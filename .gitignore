@@ -19,7 +19,9 @@ __pycache__/
 C extensions
 *.so
 venv/
-# *.txt 
+*.txt 
+git_token.json 
+.docs/
 
 
 # Distribution / packaging
